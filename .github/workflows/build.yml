@@ -26,11 +26,13 @@ jobs:
           export DEBIAN_FRONTEND=noninteractive
           dpkg --add-architecture i386
           apt-get update
-          apt-get install -y bc bison build-essential ccache flex gnupg gperf liblz4-tool libncurses5 libncurses5-dev libssl-dev libxml2 libxml2-utils lzop rsync schedtool squashfs-tools xsltproc zip unzip zlib1g-dev python3 python2 wget file libc6:i386 libncurses5:i386 libstdc++6:i386
+          apt-get install -y bc bison build-essential ccache flex gnupg gperf liblz4-tool libncurses5 libncurses5-dev libssl-dev libxml2 libxml2-utils lzop rsync schedtool squashfs-tools xsltproc zip unzip zlib1g-dev python3 python2 wget file libc6:i386 libncurses5:i386 libstdc++6:i386 lib32z1 lib32stdc++6
 
       - name: Download GCC 4.9 Toolchain
         run: |
-          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 $GITHUB_WORKSPACE/toolchain
+          # Use a relative path to avoid container mounting issues
+          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 toolchain
+          chmod -R +x toolchain/bin/
 
       - name: Integrate SukiSU-Ultra
         run: |
@@ -39,7 +41,8 @@ jobs:
       - name: Configure and Build Kernel
         run: |
           export ARCH=arm64
-          export CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-
+          # Use relative path for CROSS_COMPILE
+          export CROSS_COMPILE=$(pwd)/toolchain/bin/aarch64-linux-android-
           
           # Clean and Load Defconfig
           make clean && make mrproper
