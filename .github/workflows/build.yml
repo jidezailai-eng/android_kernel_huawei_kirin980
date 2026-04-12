@@ -63,32 +63,3 @@ jobs:
         with:
           name: Kirin980-SukiSU-Kernel
           path: arch/arm64/boot/Image.gz-dtb
-          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s main
-
-      - name: Configure and Build Kernel
-        run: |
-          export ARCH=arm64
-          export CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-
-          
-          # Clean and Load Defconfig
-          make clean && make mrproper
-          make Pangu_Kirin980_defconfig
-          
-          # Enable SukiSU/KSU/SUSFS configs
-          echo "CONFIG_KALLSYMS_ALL=y" >> .config
-          echo "CONFIG_KPROBES=y" >> .config
-          echo "CONFIG_KPROBE_EVENTS=y" >> .config
-          echo "CONFIG_KPM=y" >> .config
-          echo "CONFIG_SUSFS=y" >> .config
-          
-          # Handle prompts
-          yes "" | make oldconfig
-          
-          # Compile
-          make -j$(nproc)
-
-      - name: Upload Kernel Image
-        uses: actions/upload-artifact@v4
-        with:
-          name: Kirin980-SukiSU-Kernel
-          path: arch/arm64/boot/Image.gz-dtb
