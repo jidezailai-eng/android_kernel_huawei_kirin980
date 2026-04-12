@@ -1,0 +1,55 @@
+name: Build Kirin 980 Kernel with SukiSU-Ultra
+
+on:
+  workflow_dispatch: # Allows manual trigger from the Actions tab
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+        with:
+          repository: maimaiguanfan/android_kernel_huawei_kirin980
+          ref: master
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache curl flex git gnupg gperf liblz4-tool libncurses5 libncurses5-dev libssl-dev libxml2 libxml2-utils lzop rsync schedtool squashfs-tools xsltproc zip unzip zlib1g-dev python3 python2 wget ca-certificates file
+
+      - name: Download GCC 4.9 Toolchain
+        run: |
+          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 $GITHUB_WORKSPACE/toolchain
+
+      - name: Integrate SukiSU-Ultra
+        run: |
+          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s main
+
+      - name: Configure and Build Kernel
+        run: |
+          export ARCH=arm64
+          export CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-
+          
+          # Clean and Load Defconfig
+          make clean && make mrproper
+          make Pangu_Kirin980_defconfig
+          
+          # Enable SukiSU/KSU/SUSFS configs
+          echo "CONFIG_KALLSYMS_ALL=y" >> .config
+          echo "CONFIG_KPROBES=y" >> .config
+          echo "CONFIG_KPROBE_EVENTS=y" >> .config
+          echo "CONFIG_KPM=y" >> .config
+          echo "CONFIG_SUSFS=y" >> .config
+          
+          # Handle prompts
+          yes "" | make oldconfig
+          
+          # Compile
+          make -j$(nproc)
+
+      - name: Upload Kernel Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kirin980-SukiSU-Kernel
+          path: arch/arm64/boot/Image.gz-dtb
