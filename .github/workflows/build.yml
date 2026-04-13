@@ -56,9 +56,9 @@ jobs:
 
       - name: Download AOSP GCC 4.9 Toolchain
         run: |
-          # The Ubuntu GCC 9 compiler is too strict for this old kernel code.
-          # We must use the official Android GCC 4.9 toolchain to prevent -Werror build failures.
-          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 toolchain
+          # Google removed the binaries from the 'master' branch when they switched to Clang.
+          # We must specify an older Android tag to get the actual compiler files.
+          git clone --depth=1 -b android-10.0.0_r47 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 toolchain
 
       - name: Integrate SukiSU-Ultra
         run: |
