@@ -1,4 +1,4 @@
-name: Build Kirin 980 Kernel (Force Path)
+name: Build Kirin 980 Kernel (AOSP Toolchain)
 
 on:
   workflow_dispatch:
@@ -29,9 +29,6 @@ jobs:
             bc \
             bison \
             build-essential \
-            gcc-aarch64-linux-gnu \
-            g++-aarch64-linux-gnu \
-            binutils-aarch64-linux-gnu \
             ccache \
             device-tree-compiler \
             flex \
@@ -51,26 +48,17 @@ jobs:
             python3 \
             python3-dev
 
-      - name: Verify DTC Installation
+      - name: Setup Device Tree Compiler Path
         run: |
-          which dtc
-          dtc --version
-
-      - name: Force Toolchain Path
-        run: |
-          # The kernel is hardcoded to look for toolchain/bin/aarch64-linux-android-gcc
-          # We will trick it by creating that folder and symlinking the system compiler
-          mkdir -p toolchain/bin
-          ln -s /usr/bin/aarch64-linux-gnu-gcc toolchain/bin/aarch64-linux-android-gcc
-          ln -s /usr/bin/aarch64-linux-gnu-ld toolchain/bin/aarch64-linux-android-ld
-          ln -s /usr/bin/aarch64-linux-gnu-objcopy toolchain/bin/aarch64-linux-android-objcopy
-          ln -s /usr/bin/aarch64-linux-gnu-objdump toolchain/bin/aarch64-linux-android-objdump
-          ln -s /usr/bin/aarch64-linux-gnu-nm toolchain/bin/aarch64-linux-android-nm
-          ln -s /usr/bin/aarch64-linux-gnu-strip toolchain/bin/aarch64-linux-android-strip
-          
-          # The kernel is also hardcoded to look for the device tree compiler at /tools/dtc
+          # Huawei Makefiles hardcode dtc to /tools/dtc
           mkdir -p /tools
           ln -s /usr/bin/dtc /tools/dtc
+
+      - name: Download AOSP GCC 4.9 Toolchain
+        run: |
+          # The Ubuntu GCC 9 compiler is too strict for this old kernel code.
+          # We must use the official Android GCC 4.9 toolchain to prevent -Werror build failures.
+          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 toolchain
 
       - name: Integrate SukiSU-Ultra
         run: |
@@ -80,7 +68,7 @@ jobs:
         run: |
           export ARCH=arm64
           export DTC=/usr/bin/dtc
-          # Point to our "fake" toolchain folder
+          # Point CROSS_COMPILE to our newly downloaded AOSP toolchain
           export CROSS_COMPILE=$(pwd)/toolchain/bin/aarch64-linux-android-
           
           # Clean and Load Defconfig
