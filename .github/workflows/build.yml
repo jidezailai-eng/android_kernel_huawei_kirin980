@@ -1,4 +1,4 @@
-name: Build Kirin 980 Kernel (AOSP Toolchain)
+name: Build Kirin 980 Kernel (LineageOS Toolchain)
 
 on:
   workflow_dispatch:
@@ -21,9 +21,11 @@ jobs:
           repository: maimaiguanfan/android_kernel_huawei_kirin980
           ref: master
 
-      - name: Install Build Dependencies
+      - name: Install Build Dependencies (with 32-bit support)
         run: |
           export DEBIAN_FRONTEND=noninteractive
+          # Enable 32-bit architecture for older GCC toolchains
+          dpkg --add-architecture i386
           apt-get update
           apt-get install -y \
             bc \
@@ -46,7 +48,10 @@ jobs:
             squashfs-tools \
             xsltproc \
             python3 \
-            python3-dev
+            python3-dev \
+            libc6:i386 \
+            libncurses5:i386 \
+            libstdc++6:i386
 
       - name: Setup Device Tree Compiler Path
         run: |
@@ -54,11 +59,10 @@ jobs:
           mkdir -p /tools
           ln -s /usr/bin/dtc /tools/dtc
 
-      - name: Download AOSP GCC 4.9 Toolchain
+      - name: Download LineageOS GCC 4.9 Toolchain
         run: |
-          # Google removed the binaries from the 'master' branch when they switched to Clang.
-          # We must specify an older Android tag to get the actual compiler files.
-          git clone --depth=1 -b android-10.0.0_r47 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 toolchain
+          # We use the LineageOS fork of the toolchain as it is the most stable for older Android kernels
+          git clone --depth=1 -b lineage-18.1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 toolchain
 
       - name: Integrate SukiSU-Ultra
         run: |
@@ -68,7 +72,7 @@ jobs:
         run: |
           export ARCH=arm64
           export DTC=/usr/bin/dtc
-          # Point CROSS_COMPILE to our newly downloaded AOSP toolchain
+          # Point CROSS_COMPILE to our newly downloaded LineageOS toolchain
           export CROSS_COMPILE=$(pwd)/toolchain/bin/aarch64-linux-android-
           
           # Clean and Load Defconfig
