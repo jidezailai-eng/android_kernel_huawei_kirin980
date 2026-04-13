@@ -67,6 +67,10 @@ jobs:
           ln -s /usr/bin/aarch64-linux-gnu-objdump toolchain/bin/aarch64-linux-android-objdump
           ln -s /usr/bin/aarch64-linux-gnu-nm toolchain/bin/aarch64-linux-android-nm
           ln -s /usr/bin/aarch64-linux-gnu-strip toolchain/bin/aarch64-linux-android-strip
+          
+          # The kernel is also hardcoded to look for the device tree compiler at /tools/dtc
+          mkdir -p /tools
+          ln -s /usr/bin/dtc /tools/dtc
 
       - name: Integrate SukiSU-Ultra
         run: |
