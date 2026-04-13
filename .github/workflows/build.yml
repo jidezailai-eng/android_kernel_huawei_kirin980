@@ -25,7 +25,33 @@ jobs:
         run: |
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
-          apt-get install -y bc bison build-essential ccache flex gnupg gperf liblz4-tool libncurses5 libncurses5-dev libssl-dev libxml2 libxml2-utils lzop rsync schedtool squashfs-tools xsltproc zip unzip zlib1g-dev python3 python2 wget file gcc-aarch64-linux-gnu
+          apt-get install -y \
+            bc \
+            bison \
+            build-essential \
+            ccache \
+            device-tree-compiler \
+            flex \
+            gnupg \
+            gperf \
+            liblz4-tool \
+            libncurses5 \
+            libncurses5-dev \
+            libssl-dev \
+            libxml2 \
+            libxml2-utils \
+            lzop \
+            rsync \
+            schedtool \
+            squashfs-tools \
+            xsltproc \
+            python3 \
+            python3-dev
+
+      - name: Verify DTC Installation
+        run: |
+          which dtc
+          dtc --version
 
       - name: Force Toolchain Path
         run: |
@@ -46,6 +72,7 @@ jobs:
       - name: Configure and Build Kernel
         run: |
           export ARCH=arm64
+          export DTC=/usr/bin/dtc
           # Point to our "fake" toolchain folder
           export CROSS_COMPILE=$(pwd)/toolchain/bin/aarch64-linux-android-
           
@@ -63,11 +90,20 @@ jobs:
           # Handle prompts
           yes "" | make oldconfig
           
-          # Compile
-          make -j$(nproc)
+          # Compile with verbose output for debugging
+          make -j$(nproc) V=1
 
       - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
         with:
           name: Kirin980-SukiSU-Kernel
           path: arch/arm64/boot/Image.gz-dtb
+
+      - name: Upload Build Log on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            .config
+            build.log
