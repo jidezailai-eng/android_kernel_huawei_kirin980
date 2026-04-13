@@ -1,4 +1,4 @@
-name: Build Kirin 980 Kernel (Stable)
+name: Build Kirin 980 Kernel (Force Path)
 
 on:
   workflow_dispatch:
@@ -27,6 +27,18 @@ jobs:
           apt-get update
           apt-get install -y bc bison build-essential ccache flex gnupg gperf liblz4-tool libncurses5 libncurses5-dev libssl-dev libxml2 libxml2-utils lzop rsync schedtool squashfs-tools xsltproc zip unzip zlib1g-dev python3 python2 wget file gcc-aarch64-linux-gnu
 
+      - name: Force Toolchain Path
+        run: |
+          # The kernel is hardcoded to look for toolchain/bin/aarch64-linux-android-gcc
+          # We will trick it by creating that folder and symlinking the system compiler
+          mkdir -p toolchain/bin
+          ln -s /usr/bin/aarch64-linux-gnu-gcc toolchain/bin/aarch64-linux-android-gcc
+          ln -s /usr/bin/aarch64-linux-gnu-ld toolchain/bin/aarch64-linux-android-ld
+          ln -s /usr/bin/aarch64-linux-gnu-objcopy toolchain/bin/aarch64-linux-android-objcopy
+          ln -s /usr/bin/aarch64-linux-gnu-objdump toolchain/bin/aarch64-linux-android-objdump
+          ln -s /usr/bin/aarch64-linux-gnu-nm toolchain/bin/aarch64-linux-android-nm
+          ln -s /usr/bin/aarch64-linux-gnu-strip toolchain/bin/aarch64-linux-android-strip
+
       - name: Integrate SukiSU-Ultra
         run: |
           curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s main
@@ -34,7 +46,8 @@ jobs:
       - name: Configure and Build Kernel
         run: |
           export ARCH=arm64
-          export CROSS_COMPILE=aarch64-linux-gnu-
+          # Point to our "fake" toolchain folder
+          export CROSS_COMPILE=$(pwd)/toolchain/bin/aarch64-linux-android-
           
           # Clean and Load Defconfig
           make clean && make mrproper
