@@ -62,10 +62,9 @@ jobs:
           
           # ---------------------------------------------------------
           # HUAWEI DTC STRICTNESS FIX
-          # Force the internal dtc to NEVER treat warnings as errors
+          # Strip the warning-to-error flag directly from the build rules
           # ---------------------------------------------------------
-          sed -i 's/bool warning_as_error = true;/bool warning_as_error = false;/g' scripts/dtc/checks.c || true
-          sed -i 's/error = true;/error = false;/g' scripts/dtc/checks.c || true
+          sed -i 's/-Werror//g' scripts/Makefile.lib
           
           # ---------------------------------------------------------
           # HUAWEI MISSING HEADER BUG FIX
