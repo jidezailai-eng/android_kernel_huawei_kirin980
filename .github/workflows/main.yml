@@ -40,6 +40,60 @@ jobs:
           export PATH=$(pwd)/toolchain/bin/:$PATH
           
           # Bundle our overrides into a single variable to force the Makefile to behave.
+          # We add DTC_FLAGS to force the modern compiler to ignore Huawei's sloppy I2C/SPI node definitions.
+          MAKE_CMD="make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- HOSTCFLAGS=-fcommon DTC_FLAGS=\"-Wno-error -Wno-unit_address_vs_reg -Wno-simple_bus_reg -Wno-alias_paths\""
+          
+          $MAKE_CMD clean
+          $MAKE_CMD mrproper
+          $MAKE_CMD Pangu_Kirin980_defconfig
+          
+          # ---------------------------------------------------------
+          # HUAWEI SOURCE CODE BUG FIXES
+          # Search for the missing header and move it to a visible path.
+          # If Huawei forgot to upload it, create a blank dummy file to bypass the crash.
+          # ---------------------------------------------------------
+          HEADER_PATH=$(find . -name "slowpath_count.h" | head -n 1)
+          if [ -n "$HEADER_PATH" ]; then
+              cp "$HEADER_PATH" include/linux/
+          else
+              echo "/* Dummy slowpath_count.h to bypass Huawei source bugs */" > include/linux/slowpath_count.h
+          fi
+          
+          # Force the C file to check its own local folder first
+          sed -i 's/<slowpath_count.h>/"slowpath_count.h"/g' mm/hisi/slowpath_count.c || true
+          
+          # Enable SukiSU/KSU/SUSFS configs
+          echo "CONFIG_KALLSYMS_ALL=y" >> .config
+          echo "CONFIG_KPROBES=y" >> .config
+          echo "CONFIG_KPROBE_EVENTS=y" >> .config
+          echo "CONFIG_KPM=y" >> .config
+          echo "CONFIG_SUSFS=y" >> .config
+          
+          # Handle prompts
+          yes "" | $MAKE_CMD oldconfig
+          
+          # Compile with verbose output for debugging
+          $MAKE_CMD -j$(nproc --all) V=1
+
+      - name: Upload Kernel Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kirin980-SukiSU-Kernel
+          path: arch/arm64/boot/Image.gz-dtb
+
+      - name: Upload Build Log on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            .config
+            build.log      - name: Configure and Build Kernel
+        run: |
+          # Inject the Linaro toolchain into the PATH
+          export PATH=$(pwd)/toolchain/bin/:$PATH
+          
+          # Bundle our overrides into a single variable to force the Makefile to behave.
           # -fcommon is REQUIRED on Ubuntu 22.04 to fix the multiple definition of 'yylloc' error.
           MAKE_CMD="make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- HOSTCFLAGS=-fcommon"
           
