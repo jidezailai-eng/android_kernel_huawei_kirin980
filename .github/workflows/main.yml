@@ -75,7 +75,10 @@ jobs:
           # ---------------------------------------------------------
           # HUAWEI MISSING HEADER BUG FIX
           # ---------------------------------------------------------
-          echo "/* Dummy slowpath_count.h to bypass Huawei source bugs */" > include/slowpath_count.h
+          # Create the dummy file directly in the same folder as the C file
+          echo "/* Dummy slowpath_count.h to bypass Huawei source bugs */" > mm/hisi/slowpath_count.h
+          
+          # Force the C file to load the local dummy file instead of looking in the global includes
           sed -i 's/<slowpath_count.h>/"slowpath_count.h"/g' mm/hisi/slowpath_count.c || true
           
           # Enable SukiSU/KSU/SUSFS configs
