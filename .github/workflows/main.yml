@@ -90,11 +90,15 @@ jobs:
           
           # Fix 2: cgroup_pids.h syntax error in kernel/fork.c
           sed -i 's/<.\/cgroup_huawei\/cgroup_pids.h>/"cgroup_huawei\/cgroup_pids.h"/g' kernel/fork.c || true
-          # Failsafe: Create dummy if the file is completely missing
           mkdir -p kernel/cgroup_huawei
           if [ ! -f "kernel/cgroup_huawei/cgroup_pids.h" ]; then
               echo "/* Dummy cgroup_pids.h */" > kernel/cgroup_huawei/cgroup_pids.h
           fi
+          
+          # Fix 3: dsm_audio.h missing file
+          mkdir -p drivers/devkit/audiokit/dsm_audio
+          echo "/* Dummy dsm_audio.h */" > drivers/devkit/audiokit/dsm_audio/dsm_audio.h
+          sed -i 's/<dsm_audio.h>/"dsm_audio.h"/g' drivers/devkit/audiokit/dsm_audio/dsm_audio.c || true
           
           # Enable SukiSU/KSU/SUSFS configs
           echo "CONFIG_KALLSYMS_ALL=y" >> .config
