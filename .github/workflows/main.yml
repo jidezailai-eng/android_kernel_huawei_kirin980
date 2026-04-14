@@ -48,10 +48,9 @@ jobs:
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           
-          # Fixes for GCC 10+ host compiler strictness and Huawei's sloppy DTS warnings
+          # Fixes for GCC 10+ host compiler strictness
           export HOSTCFLAGS="-fcommon -fPIC"
           export HOSTLDFLAGS="-fcommon"
-          export DTC_FLAGS="-Wno-error -Wno-unit_address_vs_reg -Wno-simple_bus_reg -Wno-alias_paths"
           
           make clean && make mrproper
           make Pangu_Kirin980_defconfig
