@@ -21,7 +21,7 @@ jobs:
           repository: maimaiguanfan/android_kernel_huawei_kirin980
           ref: master
 
-      - name: Install Build Dependencies (with 32-bit support)
+      - name: Install Build Dependencies (with 32-bit & Python2 support)
         run: |
           export DEBIAN_FRONTEND=noninteractive
           # Enable 32-bit architecture for older GCC toolchains
@@ -47,11 +47,15 @@ jobs:
             schedtool \
             squashfs-tools \
             xsltproc \
+            python2 \
             python3 \
             python3-dev \
             libc6:i386 \
             libncurses5:i386 \
             libstdc++6:i386
+
+          # Fix for the "bad interpreter" GCC wrapper error
+          ln -sf /usr/bin/python2 /usr/bin/python
 
       - name: Setup Device Tree Compiler Path
         run: |
