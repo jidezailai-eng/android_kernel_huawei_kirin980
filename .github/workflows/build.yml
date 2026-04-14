@@ -69,6 +69,41 @@ jobs:
           name: build-logs
           path: |
             .config
+            build.log      - name: Configure and Build Kernel
+        run: |
+          # Inject the Linaro toolchain into the PATH
+          export PATH=$(pwd)/toolchain/bin/:$PATH
+          export ARCH=arm64
+          export SUBARCH=arm64
+          # Use the Linaro prefix instead of the Android prefix
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          
+          make clean && make mrproper
+          make Pangu_Kirin980_defconfig
+          
+          # Enable SukiSU/KSU/SUSFS configs
+          echo "CONFIG_KALLSYMS_ALL=y" >> .config
+          echo "CONFIG_KPROBES=y" >> .config
+          echo "CONFIG_KPROBE_EVENTS=y" >> .config
+          echo "CONFIG_KPM=y" >> .config
+          echo "CONFIG_SUSFS=y" >> .config
+          
+          yes "" | make oldconfig
+          make -j$(nproc --all) V=1
+
+      - name: Upload Kernel Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kirin980-SukiSU-Kernel
+          path: arch/arm64/boot/Image.gz-dtb
+
+      - name: Upload Build Log on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            .config
             build.log
     - name: Configure and Build Kernel
       run: |
