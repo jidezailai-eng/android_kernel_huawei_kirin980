@@ -44,11 +44,13 @@ jobs:
           # Inject the Linaro toolchain into the PATH
           export PATH=$(pwd)/toolchain/bin/:$PATH
           
-          # Export variables globally to avoid Bash quote-escaping nightmares
           export ARCH=arm64
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
-          export HOSTCFLAGS="-fcommon"
+          
+          # Fixes for GCC 10+ host compiler strictness and Huawei's sloppy DTS warnings
+          export HOSTCFLAGS="-fcommon -fPIC"
+          export HOSTLDFLAGS="-fcommon"
           export DTC_FLAGS="-Wno-error -Wno-unit_address_vs_reg -Wno-simple_bus_reg -Wno-alias_paths"
           
           make clean && make mrproper
@@ -80,7 +82,8 @@ jobs:
           yes "" | make oldconfig
           
           # Compile with verbose output for debugging
-          make -j$(nproc --all) V=1
+          # Explicitly pass HOSTCC to prevent the Makefile from overriding our -fcommon fix
+          make -j$(nproc --all) V=1 HOSTCC="gcc -fcommon"
 
       - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
