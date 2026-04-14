@@ -19,7 +19,7 @@ jobs:
           sudo apt-get install -y binutils make python2 libssl-dev flex unzip ca-certificates xz-utils cpio device-tree-compiler git bc bison build-essential ccache curl g++-multilib gcc-multilib gnupg gperf lib32ncurses5-dev lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libxml2 libxml2-utils lzop rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3 python3-dev
           
           # Create the Python 2.7 symlink EXACTLY like the P10 script
-          sudo ln -sf /usr/bin/python2 /usr/bin/python
+          sudo ln -sf /usr/bin/python2.7 /usr/bin/python
           
           # Huawei Makefiles hardcode dtc to /tools/dtc
           sudo mkdir -p /tools
@@ -38,13 +38,14 @@ jobs:
         run: |
           # Inject the Linaro toolchain into the PATH
           export PATH=$(pwd)/toolchain/bin/:$PATH
-          export ARCH=arm64
-          export SUBARCH=arm64
-          # Use the Linaro prefix instead of the Android prefix
-          export CROSS_COMPILE=aarch64-linux-gnu-
           
-          make clean && make mrproper
-          make Pangu_Kirin980_defconfig
+          # Bundle our overrides into a single variable to force the Makefile to behave.
+          # -fcommon is REQUIRED on Ubuntu 22.04 to fix the multiple definition of 'yylloc' error.
+          MAKE_CMD="make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- HOSTCFLAGS=-fcommon"
+          
+          $MAKE_CMD clean
+          $MAKE_CMD mrproper
+          $MAKE_CMD Pangu_Kirin980_defconfig
           
           # Enable SukiSU/KSU/SUSFS configs
           echo "CONFIG_KALLSYMS_ALL=y" >> .config
@@ -53,8 +54,11 @@ jobs:
           echo "CONFIG_KPM=y" >> .config
           echo "CONFIG_SUSFS=y" >> .config
           
-          yes "" | make oldconfig
-          make -j$(nproc --all) V=1
+          # Handle prompts
+          yes "" | $MAKE_CMD oldconfig
+          
+          # Compile with verbose output for debugging
+          $MAKE_CMD -j$(nproc --all) V=1
 
       - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
