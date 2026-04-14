@@ -82,10 +82,19 @@ jobs:
           sed -i 's/\.error = true/.error = false/g' scripts/dtc/checks.c || true
           
           # ---------------------------------------------------------
-          # HUAWEI MISSING HEADER BUG FIX
+          # HUAWEI MISSING HEADER & SYNTAX BUG FIXES
           # ---------------------------------------------------------
+          # Fix 1: slowpath_count.h
           echo "/* Dummy slowpath_count.h to bypass Huawei source bugs */" > include/slowpath_count.h
           sed -i 's/<slowpath_count.h>/"slowpath_count.h"/g' mm/hisi/slowpath_count.c || true
+          
+          # Fix 2: cgroup_pids.h syntax error in kernel/fork.c
+          sed -i 's/<.\/cgroup_huawei\/cgroup_pids.h>/"cgroup_huawei\/cgroup_pids.h"/g' kernel/fork.c || true
+          # Failsafe: Create dummy if the file is completely missing
+          mkdir -p kernel/cgroup_huawei
+          if [ ! -f "kernel/cgroup_huawei/cgroup_pids.h" ]; then
+              echo "/* Dummy cgroup_pids.h */" > kernel/cgroup_huawei/cgroup_pids.h
+          fi
           
           # Enable SukiSU/KSU/SUSFS configs
           echo "CONFIG_KALLSYMS_ALL=y" >> .config
@@ -97,7 +106,8 @@ jobs:
           # Handle prompts
           yes "" | make oldconfig
           
-          # Throttle the compiler to 1 job to prevent GitHub Actions from running out of RAM
+          # Compile with verbose output for debugging
+          # Throttle to -j1 to prevent GitHub Actions from running out of RAM
           make -j1 V=1 HOSTCC="gcc -fcommon"
 
       - name: Upload Kernel Image
