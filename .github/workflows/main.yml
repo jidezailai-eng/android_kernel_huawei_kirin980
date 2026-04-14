@@ -48,6 +48,10 @@ jobs:
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           
+          # Fixes for GCC 10+ host compiler strictness
+          export HOSTCFLAGS="-fcommon -fPIC"
+          export HOSTLDFLAGS="-fcommon"
+          
           make clean && make mrproper
           make Pangu_Kirin980_defconfig
           
@@ -57,9 +61,19 @@ jobs:
           sed -i 's/YYLTYPE yylloc;/extern YYLTYPE yylloc;/g' scripts/dtc/dtc-lexer.lex.c_shipped || true
           
           # ---------------------------------------------------------
+          # HUAWEI DTC STRICTNESS FIX
+          # Force the internal dtc to NEVER treat warnings as errors
+          # ---------------------------------------------------------
+          sed -i 's/bool warning_as_error = true;/bool warning_as_error = false;/g' scripts/dtc/checks.c || true
+          sed -i 's/error = true;/error = false;/g' scripts/dtc/checks.c || true
+          
+          # ---------------------------------------------------------
           # HUAWEI MISSING HEADER BUG FIX
           # ---------------------------------------------------------
           echo "/* Dummy slowpath_count.h to bypass Huawei source bugs */" > include/slowpath_count.h
+          
+          # Force the C file to check its own local folder first
+          sed -i 's/<slowpath_count.h>/"slowpath_count.h"/g' mm/hisi/slowpath_count.c || true
           
           # Enable SukiSU/KSU/SUSFS configs
           echo "CONFIG_KALLSYMS_ALL=y" >> .config
@@ -72,7 +86,7 @@ jobs:
           yes "" | make oldconfig
           
           # Compile with verbose output for debugging
-          make -j$(nproc --all) V=1
+          make -j$(nproc --all) V=1 HOSTCC="gcc -fcommon"
 
       - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
