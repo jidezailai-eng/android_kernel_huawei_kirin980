@@ -1,112 +1,73 @@
-name: Build Kirin 980 Kernel (LineageOS Toolchain)
+name: Build Kirin 980 Kernel (Linaro Toolchain)
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    container:
-      image: ubuntu:20.04
-      options: --user root
+    runs-on: ubuntu-20.04
+
     steps:
-      - name: Install Core Tools
-        run: |
-          apt-get update
-          apt-get install -y git curl ca-certificates
+    - name: Checkout Source
+      uses: actions/checkout@v4
+      with:
+        repository: maimaiguanfan/android_kernel_huawei_kirin980
+        ref: master
 
-      - name: Checkout Source
-        uses: actions/checkout@v4
-        with:
-          repository: maimaiguanfan/android_kernel_huawei_kirin980
-          ref: master
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y binutils make python2 libssl-dev flex unzip ca-certificates xz-utils cpio device-tree-compiler git bc bison build-essential ccache curl g++-multilib gcc-multilib gnupg gperf lib32ncurses5-dev lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libxml2 libxml2-utils lzop rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3 python3-dev
 
-      - name: Install Build Dependencies (with 32-bit & Python2 support)
-        run: |
-          export DEBIAN_FRONTEND=noninteractive
-          # Enable 32-bit architecture for older GCC toolchains
-          dpkg --add-architecture i386
-          apt-get update
-          apt-get install -y \
-            bc \
-            bison \
-            build-essential \
-            ccache \
-            device-tree-compiler \
-            flex \
-            gnupg \
-            gperf \
-            liblz4-tool \
-            libncurses5 \
-            libncurses5-dev \
-            libssl-dev \
-            libxml2 \
-            libxml2-utils \
-            lzop \
-            rsync \
-            schedtool \
-            squashfs-tools \
-            xsltproc \
-            python2 \
-            python3 \
-            python3-dev \
-            libc6:i386 \
-            libncurses5:i386 \
-            libstdc++6:i386
+        # Create the Python 2.7 symlink EXACTLY like the P10 script
+        sudo ln -sf /usr/bin/python2.7 /usr/bin/python
+        
+        # Huawei Makefiles hardcode dtc to /tools/dtc
+        sudo mkdir -p /tools
+        sudo ln -s /usr/bin/dtc /tools/dtc
 
-          # Fix for the "bad interpreter" GCC wrapper error
-          ln -sf /usr/bin/python2 /usr/bin/python
+    - name: Download Coconutat Linaro Toolchain
+      run: |
+        # Use the known-good toolchain from the P10 reference!
+        git clone https://github.com/Coconutat/ToolChains.git --depth=1 -b linaro_gcc_4.9 toolchain
 
-      - name: Setup Device Tree Compiler Path
-        run: |
-          # Huawei Makefiles hardcode dtc to /tools/dtc
-          mkdir -p /tools
-          ln -s /usr/bin/dtc /tools/dtc
+    - name: Integrate SukiSU-Ultra
+      run: |
+        curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s main
 
-      - name: Download LineageOS GCC 4.9 Toolchain
-        run: |
-          # We use the LineageOS fork of the toolchain as it is the most stable for older Android kernels
-          git clone --depth=1 -b lineage-18.1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 toolchain
+    - name: Configure and Build Kernel
+      run: |
+        # Inject the Linaro toolchain into the PATH
+        export PATH=$(pwd)/toolchain/bin/:$PATH
+        export ARCH=arm64
+        export SUBARCH=arm64
+        # Use the Linaro prefix instead of the Android prefix
+        export CROSS_COMPILE=aarch64-linux-gnu-
+        
+        make clean && make mrproper
+        make Pangu_Kirin980_defconfig
+        
+        # Enable SukiSU/KSU/SUSFS configs
+        echo "CONFIG_KALLSYMS_ALL=y" >> .config
+        echo "CONFIG_KPROBES=y" >> .config
+        echo "CONFIG_KPROBE_EVENTS=y" >> .config
+        echo "CONFIG_KPM=y" >> .config
+        echo "CONFIG_SUSFS=y" >> .config
+        
+        yes "" | make oldconfig
+        make -j$(nproc --all) V=1
 
-      - name: Integrate SukiSU-Ultra
-        run: |
-          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s main
+    - name: Upload Kernel Image
+      uses: actions/upload-artifact@v4
+      with:
+        name: Kirin980-SukiSU-Kernel
+        path: arch/arm64/boot/Image.gz-dtb
 
-      - name: Configure and Build Kernel
-        run: |
-          export ARCH=arm64
-          export DTC=/usr/bin/dtc
-          # Point CROSS_COMPILE to our newly downloaded LineageOS toolchain
-          export CROSS_COMPILE=$(pwd)/toolchain/bin/aarch64-linux-android-
-          
-          # Clean and Load Defconfig
-          make clean && make mrproper
-          make Pangu_Kirin980_defconfig
-          
-          # Enable SukiSU/KSU/SUSFS configs
-          echo "CONFIG_KALLSYMS_ALL=y" >> .config
-          echo "CONFIG_KPROBES=y" >> .config
-          echo "CONFIG_KPROBE_EVENTS=y" >> .config
-          echo "CONFIG_KPM=y" >> .config
-          echo "CONFIG_SUSFS=y" >> .config
-          
-          # Handle prompts
-          yes "" | make oldconfig
-          
-          # Compile with verbose output for debugging
-          make -j$(nproc) V=1
-
-      - name: Upload Kernel Image
-        uses: actions/upload-artifact@v4
-        with:
-          name: Kirin980-SukiSU-Kernel
-          path: arch/arm64/boot/Image.gz-dtb
-
-      - name: Upload Build Log on Failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs
-          path: |
-            .config
-            build.log
+    - name: Upload Build Log on Failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-logs
+        path: |
+          .config
+          build.log
