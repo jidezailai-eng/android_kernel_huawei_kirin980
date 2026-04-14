@@ -47,6 +47,21 @@ jobs:
           $MAKE_CMD mrproper
           $MAKE_CMD Pangu_Kirin980_defconfig
           
+          # ---------------------------------------------------------
+          # HUAWEI SOURCE CODE BUG FIXES
+          # Search for the missing header and move it to a visible path.
+          # If Huawei forgot to upload it, create a blank dummy file to bypass the crash.
+          # ---------------------------------------------------------
+          HEADER_PATH=$(find . -name "slowpath_count.h" | head -n 1)
+          if [ -n "$HEADER_PATH" ]; then
+              cp "$HEADER_PATH" include/linux/
+          else
+              echo "/* Dummy slowpath_count.h to bypass Huawei source bugs */" > include/linux/slowpath_count.h
+          fi
+          
+          # Force the C file to check its own local folder first
+          sed -i 's/<slowpath_count.h>/"slowpath_count.h"/g' mm/hisi/slowpath_count.c || true
+          
           # Enable SukiSU/KSU/SUSFS configs
           echo "CONFIG_KALLSYMS_ALL=y" >> .config
           echo "CONFIG_KPROBES=y" >> .config
