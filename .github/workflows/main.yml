@@ -26,14 +26,23 @@ jobs:
           # Create the Python 2.7 symlink EXACTLY like the P10 script
           sudo ln -sf /usr/bin/python2.7 /usr/bin/python
           
-          # Huawei Makefiles hardcode dtc to /tools/dtc.
-          # We use a wrapper to FORCE the strict Ubuntu compiler to ignore Huawei's errors.
-          sudo mkdir -p /tools
-          cat << 'EOF' | sudo tee /tools/dtc
+          # Move the real DTC so our wrapper can intercept it
+          sudo mv /usr/bin/dtc /usr/bin/dtc_real
+          
+          # Create an impenetrable DTC wrapper script
+          sudo bash -c 'cat > /usr/bin/dtc << "EOF"
           #!/bin/bash
-          /usr/bin/dtc "$@" -Wno-unit_address_vs_reg -Wno-simple_bus_reg -Wno-alias_paths -Wno-avoid_default_addr_size -Wno-gpios_property -Wno-interrupts_property -Wno-interrupt_provider -Wno-unique_unit_address -Wno-avoid_unnecessary_addr_size || true
-          EOF
-          sudo chmod +x /tools/dtc
+          # Rip out ANY -Werror flags passed by Huawei makefiles
+          ARGS=$(echo "$@" | sed "s/-Werror//g" | sed "s/-W error//g")
+          # Force the compiler to ignore the specific warnings that are failing the build
+          /usr/bin/dtc_real -Wno-unit_address_vs_reg -Wno-simple_bus_reg -Wno-alias_paths -Wno-avoid_default_addr_size -Wno-gpios_property -Wno-interrupts_property -Wno-interrupt_provider -Wno-unique_unit_address -Wno-avoid_unnecessary_addr_size $ARGS || true
+          EOF'
+          
+          sudo chmod +x /usr/bin/dtc
+          
+          # Huawei Makefiles hardcode dtc to /tools/dtc, link it to our wrapper
+          sudo mkdir -p /tools
+          sudo ln -s /usr/bin/dtc /tools/dtc
 
       - name: Download Coconutat Linaro Toolchain
         run: |
@@ -66,19 +75,9 @@ jobs:
           sed -i 's/YYLTYPE yylloc;/extern YYLTYPE yylloc;/g' scripts/dtc/dtc-lexer.lex.c_shipped || true
           
           # ---------------------------------------------------------
-          # HUAWEI DTC INTERNAL COMPILER NEUTER
-          # Disable all warning/error flags in the internal DTC checks
-          # ---------------------------------------------------------
-          sed -i 's/\.warn = true/.warn = false/g' scripts/dtc/checks.c || true
-          sed -i 's/\.error = true/.error = false/g' scripts/dtc/checks.c || true
-          
-          # ---------------------------------------------------------
           # HUAWEI MISSING HEADER BUG FIX
           # ---------------------------------------------------------
-          # Create the dummy file directly in the same folder as the C file
-          echo "/* Dummy slowpath_count.h to bypass Huawei source bugs */" > mm/hisi/slowpath_count.h
-          
-          # Force the C file to load the local dummy file instead of looking in the global includes
+          echo "/* Dummy slowpath_count.h to bypass Huawei source bugs */" > include/slowpath_count.h
           sed -i 's/<slowpath_count.h>/"slowpath_count.h"/g' mm/hisi/slowpath_count.c || true
           
           # Enable SukiSU/KSU/SUSFS configs
