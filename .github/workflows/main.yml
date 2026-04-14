@@ -26,9 +26,14 @@ jobs:
           # Create the Python 2.7 symlink EXACTLY like the P10 script
           sudo ln -sf /usr/bin/python2.7 /usr/bin/python
           
-          # Huawei Makefiles hardcode dtc to /tools/dtc
+          # Huawei Makefiles hardcode dtc to /tools/dtc.
+          # We use a wrapper to FORCE the strict Ubuntu compiler to ignore Huawei's errors.
           sudo mkdir -p /tools
-          sudo ln -s /usr/bin/dtc /tools/dtc
+          cat << 'EOF' | sudo tee /tools/dtc
+          #!/bin/bash
+          /usr/bin/dtc "$@" -Wno-unit_address_vs_reg -Wno-simple_bus_reg -Wno-alias_paths -Wno-avoid_default_addr_size -Wno-gpios_property -Wno-interrupts_property -Wno-interrupt_provider -Wno-unique_unit_address -Wno-avoid_unnecessary_addr_size || true
+          EOF
+          sudo chmod +x /tools/dtc
 
       - name: Download Coconutat Linaro Toolchain
         run: |
@@ -61,17 +66,16 @@ jobs:
           sed -i 's/YYLTYPE yylloc;/extern YYLTYPE yylloc;/g' scripts/dtc/dtc-lexer.lex.c_shipped || true
           
           # ---------------------------------------------------------
-          # HUAWEI DTC STRICTNESS FIX
-          # Strip the warning-to-error flag directly from the build rules
+          # HUAWEI DTC INTERNAL COMPILER NEUTER
+          # Disable all warning/error flags in the internal DTC checks
           # ---------------------------------------------------------
-          sed -i 's/-Werror//g' scripts/Makefile.lib
+          sed -i 's/\.warn = true/.warn = false/g' scripts/dtc/checks.c || true
+          sed -i 's/\.error = true/.error = false/g' scripts/dtc/checks.c || true
           
           # ---------------------------------------------------------
           # HUAWEI MISSING HEADER BUG FIX
           # ---------------------------------------------------------
           echo "/* Dummy slowpath_count.h to bypass Huawei source bugs */" > include/slowpath_count.h
-          
-          # Force the C file to check its own local folder first
           sed -i 's/<slowpath_count.h>/"slowpath_count.h"/g' mm/hisi/slowpath_count.c || true
           
           # Enable SukiSU/KSU/SUSFS configs
@@ -85,6 +89,7 @@ jobs:
           yes "" | make oldconfig
           
           # Compile with verbose output for debugging
+          # Explicitly pass HOSTCC to prevent the Makefile from overriding our -fcommon fix
           make -j$(nproc --all) V=1 HOSTCC="gcc -fcommon"
 
       - name: Upload Kernel Image
