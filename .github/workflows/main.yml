@@ -102,6 +102,12 @@ jobs:
           int audio_dsm_register(void) { return 0; }
           EOF
           
+          # Fix 4: Missing lcd_kit_adapt.h
+          mkdir -p drivers/devkit/lcdkit/lcdkit3.0/kernel/hisi/include
+          if [ ! -f "drivers/devkit/lcdkit/lcdkit3.0/kernel/hisi/include/lcd_kit_adapt.h" ]; then
+              echo "/* Dummy lcd_kit_adapt.h */" > drivers/devkit/lcdkit/lcdkit3.0/kernel/hisi/include/lcd_kit_adapt.h
+          fi
+          
           # Enable SukiSU/KSU/SUSFS configs
           echo "CONFIG_KALLSYMS_ALL=y" >> .config
           echo "CONFIG_KPROBES=y" >> .config
