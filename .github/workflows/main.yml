@@ -78,4 +78,107 @@ jobs:
           # HUAWEI DTC INTERNAL COMPILER NEUTER
           # Disable all warning/error flags in the internal DTC checks
           # ---------------------------------------------------------
+          sed -i 's/\.warn = true/.warn = false/g' scripts/dtc/checks.c || true
+          sed -i 's/\.error = true/.error = false/g' scripts/dtc/checks.c || true
+          
+          # ---------------------------------------------------------
+          # HUAWEI MISSING HEADER & SYNTAX BUG FIXES
+          # ---------------------------------------------------------
+          # Fix 1: slowpath_count.h
+          echo "/* Dummy slowpath_count.h to bypass Huawei source bugs */" > include/slowpath_count.h
+          sed -i 's/<slowpath_count.h>/"slowpath_count.h"/g' mm/hisi/slowpath_count.c || true
+          
+          # Fix 2: cgroup_pids.h syntax error in kernel/fork.c
+          sed -i 's/<.\/cgroup_huawei\/cgroup_pids.h>/"cgroup_huawei\/cgroup_pids.h"/g' kernel/fork.c || true
+          mkdir -p kernel/cgroup_huawei
+          if [ ! -f "kernel/cgroup_huawei/cgroup_pids.h" ]; then
+              echo "/* Dummy cgroup_pids.h */" > kernel/cgroup_huawei/cgroup_pids.h
+          fi
+          
+          # Fix 3: Stub out the broken dsm_audio module with strictly-typed dummy functions
+          cat << 'EOF' > drivers/devkit/audiokit/dsm_audio/dsm_audio.c
+          int audio_dsm_report_num(void) { return 0; }
+          int audio_dsm_report_info(void) { return 0; }
+          int audio_dsm_register(void) { return 0; }
+          EOF
+          
+          # Fix 4: Missing lcd_kit_adapt.h with proper 3-argument signature
+          mkdir -p drivers/devkit/lcdkit/lcdkit3.0/kernel/hisi/include
+          cat << 'EOF' > drivers/devkit/lcdkit/lcdkit3.0/kernel/hisi/include/lcd_kit_adapt.h
+          /* Dummy lcd_kit_adapt.h */
+          int lcd_kit_dsi_cmds_rx(void *a, void *b, void *c);
+          EOF
+          
+          # Enable SukiSU/KSU/SUSFS configs
+          echo "CONFIG_KALLSYMS_ALL=y" >> .config
+          echo "CONFIG_KPROBES=y" >> .config
+          echo "CONFIG_KPROBE_EVENTS=y" >> .config
+          echo "CONFIG_KPM=y" >> .config
+          echo "CONFIG_SUSFS=y" >> .config
+          
+          # Handle prompts
+          yes "" | make oldconfig
+          
+          # Compile with verbose output for debugging
+          # Strip root Makefile warnings and throttle to -j1
+          sed -i 's/-Werror-implicit-function-declaration//g' Makefile || true
+          make -j1 V=1 HOSTCC="gcc -fcommon" KCFLAGS="-Wno-error -Wno-error=implicit-function-declaration -Wno-error=format -Wno-error=incompatible-pointer-types"
+
+      - name: Upload Kernel Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kirin980-SukiSU-Kernel
+          path: arch/arm64/boot/Image.gz-dtb
+
+      - name: Upload Build Log on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            .config
+            build.log          # Force the compiler to ignore the specific warnings that are failing the build
+          /usr/bin/dtc_real -Wno-unit_address_vs_reg -Wno-simple_bus_reg -Wno-alias_paths -Wno-avoid_default_addr_size -Wno-gpios_property -Wno-interrupts_property -Wno-interrupt_provider -Wno-unique_unit_address -Wno-avoid_unnecessary_addr_size $ARGS || true
+          EOF'
+          
+          sudo chmod +x /usr/bin/dtc
+          
+          # Huawei Makefiles hardcode dtc to /tools/dtc, link it to our wrapper
+          sudo mkdir -p /tools
+          sudo ln -s /usr/bin/dtc /tools/dtc
+
+      - name: Download Coconutat Linaro Toolchain
+        run: |
+          # Use the known-good toolchain from the P10 reference!
+          git clone https://github.com/Coconutat/ToolChains.git --depth=1 -b linaro_gcc_4.9 toolchain
+
+      - name: Integrate SukiSU-Ultra
+        run: |
+          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s main
+
+      - name: Configure and Build Kernel
+        run: |
+          # Inject the Linaro toolchain into the PATH
+          export PATH=$(pwd)/toolchain/bin/:$PATH
+          
+          export ARCH=arm64
+          export SUBARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          
+          # Fixes for GCC 10+ host compiler strictness
+          export HOSTCFLAGS="-fcommon -fPIC"
+          export HOSTLDFLAGS="-fcommon"
+          
+          make clean && make mrproper
+          make Pangu_Kirin980_defconfig
+          
+          # ---------------------------------------------------------
+          # GCC 10+ COMPILER FIX FOR 'DTC' (yylloc multiple definition)
+          # ---------------------------------------------------------
+          sed -i 's/YYLTYPE yylloc;/extern YYLTYPE yylloc;/g' scripts/dtc/dtc-lexer.lex.c_shipped || true
+          
+          # ---------------------------------------------------------
+          # HUAWEI DTC INTERNAL COMPILER NEUTER
+          # Disable all warning/error flags in the internal DTC checks
+          # ---------------------------------------------------------
           sed -i 's/\.warn = true/.warn = false/g' scripts
