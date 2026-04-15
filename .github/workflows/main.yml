@@ -95,11 +95,11 @@ jobs:
               echo "/* Dummy cgroup_pids.h */" > kernel/cgroup_huawei/cgroup_pids.h
           fi
           
-          # Fix 3: Stub out the broken dsm_audio module with dummy functions
+          # Fix 3: Stub out the broken dsm_audio module with dummy functions (strict prototype compliant)
           cat << 'EOF' > drivers/devkit/audiokit/dsm_audio/dsm_audio.c
-          int audio_dsm_report_num() { return 0; }
-          int audio_dsm_report_info() { return 0; }
-          int audio_dsm_register() { return 0; }
+          int audio_dsm_report_num(void) { return 0; }
+          int audio_dsm_report_info(void) { return 0; }
+          int audio_dsm_register(void) { return 0; }
           EOF
           
           # Enable SukiSU/KSU/SUSFS configs
