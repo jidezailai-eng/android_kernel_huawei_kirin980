@@ -11,7 +11,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: xiao-k233/android_kernel_huawei_kirin980_KernelSU
-          ref: master # or main, if the checkout fails we'll adjust
+          ref: master
 
       - name: Install Dependencies
         run: |
@@ -34,6 +34,15 @@ jobs:
       - name: Download Linaro Toolchain
         run: git clone https://github.com/Coconutat/ToolChains.git --depth=1 -b linaro_gcc_4.9 toolchain
 
+      - name: Clean Up xiao-k233's Base KSU Hooks
+        run: |
+          # Strip the broken standard KernelSU references so they don't conflict with SukiSU
+          sed -i '/kernelsu/d' drivers/Kconfig || true
+          sed -i '/kernelsu/d' drivers/Makefile || true
+          
+          # Fix the annoying Windows carriage return (\r) warning in Huawei's himos Kconfig
+          sed -i 's/\r$//' drivers/huawei_platform/net/himos/Kconfig || true
+
       - name: Inject SukiSU-Ultra
         run: curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s main
 
@@ -48,7 +57,6 @@ jobs:
           
           make clean && make mrproper
           
-          # Assuming they use the same defconfig, if not we'll see it in the log
           make Pangu_Kirin980_defconfig
           
           # GCC 10+ Host Fix
