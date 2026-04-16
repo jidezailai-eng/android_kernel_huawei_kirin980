@@ -1,4 +1,4 @@
-name: Build Kirin 980 Kernel (HK416AAA Source)
+name: Build Kirin 980 Kernel (xiao-k233 Source)
 
 on:
   workflow_dispatch:
@@ -10,8 +10,8 @@ jobs:
       - name: Checkout Source
         uses: actions/checkout@v4
         with:
-          repository: HK416AAA/HUAWEI_Kirin980_KernelSU
-          ref: master # If this fails to checkout, change to 'main'
+          repository: xiao-k233/android_kernel_huawei_kirin980_KernelSU
+          ref: master
 
       - name: Install Dependencies
         run: |
@@ -20,7 +20,6 @@ jobs:
           sudo apt-get install -y binutils make python2 libssl-dev flex unzip ca-certificates xz-utils cpio device-tree-compiler git bc bison build-essential ccache curl g++-multilib gcc-multilib gnupg gperf lib32ncurses5-dev lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libxml2 libxml2-utils lzop rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3 python3-dev libc6:i386 libncurses5:i386 libstdc++6:i386
           sudo ln -sf /usr/bin/python2.7 /usr/bin/python
           
-          # We'll keep our DTC wrapper just to be safe against -Werror traps
           sudo mv /usr/bin/dtc /usr/bin/dtc_real
           sudo bash -c 'cat > /usr/bin/dtc << "EOF"
           #!/bin/bash
@@ -34,13 +33,19 @@ jobs:
       - name: Download Linaro Toolchain
         run: git clone https://github.com/Coconutat/ToolChains.git --depth=1 -b linaro_gcc_4.9 toolchain
 
-      - name: Clean Up Base KSU Hooks
+      - name: The Dummy File Bypass
         run: |
-          # Strip the broken standard KernelSU references so they don't conflict with SukiSU-Ultra
-          sed -i '/kernelsu/d' drivers/Kconfig || true
-          sed -i '/kernelsu/d' drivers/Makefile || true
+          # Create fake KernelSU folders to satisfy the broken Kconfig hooks
+          mkdir -p drivers/kernelsu
+          echo "# Dummy Kconfig" > drivers/kernelsu/Kconfig
+          echo "# Dummy Makefile" > drivers/kernelsu/Makefile
           
-          # Fix the annoying Windows carriage return (\r) warning in Huawei's himos Kconfig
+          # Just in case they put a hook in the filesystem directory too
+          mkdir -p fs/kernelsu
+          echo "# Dummy Kconfig" > fs/kernelsu/Kconfig
+          echo "# Dummy Makefile" > fs/kernelsu/Makefile
+          
+          # Fix the annoying Windows carriage return (\r) warning
           sed -i 's/\r$//' drivers/huawei_platform/net/himos/Kconfig || true
 
       - name: Inject SukiSU-Ultra
@@ -57,7 +62,6 @@ jobs:
           
           make clean && make mrproper
           
-          # Assuming Pangu_Kirin980_defconfig is still the target
           make Pangu_Kirin980_defconfig
           
           # GCC 10+ Host Fix
@@ -74,7 +78,7 @@ jobs:
           
           sed -i 's/-Werror-implicit-function-declaration//g' Makefile || true
           
-          # Full speed ahead using the new source!
+          # Full speed ahead using the fixed source!
           make -j$(nproc) HOSTCC="gcc -fcommon" KCFLAGS="-Wno-error -Wno-format -Wno-implicit-function-declaration"
 
       - name: Upload Kernel Image
