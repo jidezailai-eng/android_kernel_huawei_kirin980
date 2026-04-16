@@ -93,8 +93,10 @@ jobs:
           #endif
           EOF
           
-          # Fix 5: Touchscreen driver (tpkit) angle bracket bug
-          sed -i 's/<huawei_ts_kit.h>/"huawei_ts_kit.h"/g' drivers/devkit/tpkit/3_0/*.c || true
+          # Fix 5: Touchscreen driver (tpkit) angle bracket bug - The Sledgehammer
+          # Copy all tpkit headers into the global include directory to bypass Huawei's broken Makefile
+          cp drivers/devkit/tpkit/3_0/*.h include/ || true
+          cp drivers/devkit/tpkit/3_0/*/*.h include/ || true
           
           # Enable SukiSU/KSU/SUSFS configs
           echo "CONFIG_KALLSYMS_ALL=y" >> .config
