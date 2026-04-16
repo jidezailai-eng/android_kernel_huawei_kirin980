@@ -97,6 +97,12 @@ jobs:
           cp drivers/devkit/tpkit/3_0/*.h include/ || true
           cp drivers/devkit/tpkit/3_0/*/*.h include/ || true
           cp drivers/hisi/ddrc/*.h include/ || true
+          cp drivers/hisi/hi64xx_dsp/*.h include/ || true
+          
+          # Fix 6: Failsafe for missing proprietary DSP algorithm headers
+          if [ ! -f "include/hi64xx_algo_interface.h" ]; then
+              echo "/* Dummy hi64xx_algo_interface.h */" > include/hi64xx_algo_interface.h
+          fi
           
           # Enable SukiSU/KSU/SUSFS configs
           echo "CONFIG_KALLSYMS_ALL=y" >> .config
