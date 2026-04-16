@@ -104,6 +104,12 @@ jobs:
               echo "/* Dummy hi64xx_algo_interface.h */" > include/hi64xx_algo_interface.h
           fi
           
+          # Fix 7: Failsafe for missing hifi_lpp.h
+          echo "/* Dummy hifi_lpp.h */" > include/hifi_lpp.h
+          echo "/* Dummy hifi_lpp.h */" > drivers/hisi/hifi_dsp/hifi_lpp.h
+          mkdir -p drivers/hisi/hifi_mailbox/mailbox/
+          echo "/* Dummy hifi_lpp.h */" > drivers/hisi/hifi_mailbox/mailbox/hifi_lpp.h
+          
           # Enable SukiSU/KSU/SUSFS configs
           echo "CONFIG_KALLSYMS_ALL=y" >> .config
           echo "CONFIG_KPROBES=y" >> .config
