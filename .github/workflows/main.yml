@@ -91,7 +91,9 @@ jobs:
           yes "" | make oldconfig
           
           sed -i 's/-Werror-implicit-function-declaration//g' Makefile || true
-          make -j1 V=1 HOSTCC="gcc -fcommon" KCFLAGS="-Wno-error -Wno-format -Wno-implicit-function-declaration"
+          
+          # FULL SPEED AHEAD: -j$(nproc) uses all available CPU cores, and removed V=1 to reduce log lag
+          make -j$(nproc) HOSTCC="gcc -fcommon" KCFLAGS="-Wno-error -Wno-format -Wno-implicit-function-declaration"
 
       - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
