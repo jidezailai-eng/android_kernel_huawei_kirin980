@@ -7,13 +7,12 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     env:
-      # The cheat code we learned: O=out builds the kernel in a clean, separate folder
       KERNEL_CMDLINE: "ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out"
     steps:
       - name: Checkout Source
         uses: actions/checkout@v4
         with:
-          repository: maimaiguanfan/android_kernel_huawei_kirin980 # Back to your original, reliable source!
+          repository: maimaiguanfan/android_kernel_huawei_kirin980 
           ref: master
 
       - name: Install Dependencies
@@ -23,7 +22,7 @@ jobs:
           sudo apt-get install -y binutils make python2 libssl-dev flex unzip ca-certificates xz-utils cpio device-tree-compiler git bc bison build-essential ccache curl g++-multilib gcc-multilib gnupg gperf lib32ncurses5-dev lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libxml2 libxml2-utils lzop rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3 python3-dev libc6:i386 libncurses5:i386 libstdc++6:i386
           sudo ln -sf /usr/bin/python2.7 /usr/bin/python
           
-          # Our custom DTC wrapper to block Huawei's strict warnings
+          # Our custom DTC wrapper
           sudo mv /usr/bin/dtc /usr/bin/dtc_real
           sudo bash -c 'cat > /usr/bin/dtc << "EOF"
           #!/bin/bash
@@ -56,7 +55,7 @@ jobs:
           mkdir -p drivers/devkit/lcdkit/lcdkit3.0/kernel/hisi/include
           echo -e "#ifndef __LCD_KIT_ADAPT_H__\n#define __LCD_KIT_ADAPT_H__\n#include <linux/types.h>\nstruct lcd_kit_dsi_panel_cmds;\nint lcd_kit_dsi_cmds_rx(void* hld, uint8_t* out, struct lcd_kit_dsi_panel_cmds* cmds);\n#endif" > drivers/devkit/lcdkit/lcdkit3.0/kernel/hisi/include/lcd_kit_adapt.h
           
-          # 4. The Sledgehammer Header Copy (Includes Wi-Fi from our previous run)
+          # 4. The Sledgehammer Header Copy
           cp drivers/devkit/tpkit/3_0/*.h include/ || true
           cp drivers/devkit/tpkit/3_0/*/*.h include/ || true
           cp drivers/hisi/ddrc/*.h include/ || true
@@ -65,13 +64,9 @@ jobs:
           cp drivers/huawei_platform/connectivity/bcm/wifi/driver/bcmdhd/*.h include/ || true
           cp drivers/huawei_platform/connectivity/bcm/wifi/driver/bcmdhd/include/*.h include/ || true
           
-          # 5. DSP Specific Fixes
+          # 5. DSP Specific Fixes (Removed the redundant mailbox address injection)
           touch include/hi64xx_algo_interface.h
-          touch include/hifi_lpp.h
-          mkdir -p drivers/hisi/hifi_mailbox/mailbox/
-          touch drivers/hisi/hifi_mailbox/mailbox/hifi_lpp.h
           echo "int hifi_misc_get_platform_type(void) { return 0; } int hifi_misc_probe(void) { return 0; } int hifi_misc_pcm_read(void) { return 0; } int hifi_misc_set_platform_type(void) { return 0; }" > drivers/hisi/hifi_dsp/hifi_lpp.c
-          sed -i '1i #define HIFI_AP_MAILBOX_BASE_ADDR 0' drivers/hisi/hifi_mailbox/mailbox/drv_mailbox_cfg.h || true
 
       - name: Inject SukiSU-Ultra
         run: curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s main
@@ -82,13 +77,10 @@ jobs:
           export HOSTCFLAGS="-fcommon -fPIC"
           export HOSTLDFLAGS="-fcommon"
           
-          # Create the clean out-of-tree directory
           mkdir -p out
           
-          # Generate the config inside the 'out' folder
           make $KERNEL_CMDLINE Pangu_Kirin980_defconfig
           
-          # Inject SukiSU Configs directly into the generated config
           echo "CONFIG_KALLSYMS_ALL=y" >> out/.config
           echo "CONFIG_KPROBES=y" >> out/.config
           echo "CONFIG_KPROBE_EVENTS=y" >> out/.config
@@ -99,54 +91,10 @@ jobs:
           
           sed -i 's/-Werror-implicit-function-declaration//g' Makefile || true
           
-          # Full speed ahead using the clean 'out' directory
           make $KERNEL_CMDLINE -j$(nproc --all) HOSTCC="gcc -fcommon" KCFLAGS="-Wno-error -Wno-format -Wno-implicit-function-declaration"
 
       - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
-        with:
-          name: Kirin980-SukiSU-Kernel
-          path: out/arch/arm64/boot/Image.gz-dtb
-      - name: Download Linaro Toolchain
-        run: git clone https://github.com/Coconutat/ToolChains.git --depth=1 -b linaro_gcc_4.9 toolchain
-
-      - name: Prep and Inject SukiSU-Ultra
-        run: |
-          # 1. Nuke the properly downloaded standard KernelSU
-          rm -rf KernelSU
-          rm -rf drivers/kernelsu
-          
-          # 2. Inject SukiSU-Ultra into the clean environment
-          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s main
-
-      - name: Configure and Build Kernel
-        run: |
-          export PATH=$(pwd)/toolchain/bin/:$PATH
-          export HOSTCFLAGS="-fcommon -fPIC"
-          export HOSTLDFLAGS="-fcommon"
-          
-          # 3. Create the clean output directory
-          mkdir -p out
-          
-          # 4. Generate the config inside the 'out' folder
-          make $KERNEL_CMDLINE Pangu_Kirin980_defconfig
-          
-          # Inject SukiSU Configs into the generated out/.config
-          echo "CONFIG_KALLSYMS_ALL=y" >> out/.config
-          echo "CONFIG_KPROBES=y" >> out/.config
-          echo "CONFIG_KPROBE_EVENTS=y" >> out/.config
-          echo "CONFIG_KPM=y" >> out/.config
-          echo "CONFIG_SUSFS=y" >> out/.config
-          
-          yes "" | make $KERNEL_CMDLINE oldconfig
-          
-          sed -i 's/-Werror-implicit-function-declaration//g' Makefile || true
-          
-          # 5. Full parallel build using their out-of-tree formatting
-          make $KERNEL_CMDLINE -j$(nproc --all) HOSTCC="gcc -fcommon" KCFLAGS="-Wno-error -Wno-format -Wno-implicit-function-declaration"
-
-      - name: Upload Kernel Image
-        uses: actions/upload-artifact@v4 # <-- BUMPED TO v4
         with:
           name: Kirin980-SukiSU-Kernel
           path: out/arch/arm64/boot/Image.gz-dtb
