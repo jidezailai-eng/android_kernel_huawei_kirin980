@@ -5,17 +5,16 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04 # Bumped back to a living OS
+    runs-on: ubuntu-22.04
     env:
-      # Their exact clean-build command, adapted for our Linaro compiler
       KERNEL_CMDLINE: "ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out"
     steps:
       - name: Checkout Source
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # <-- BUMPED TO v4
         with:
           repository: xiao-k233/android_kernel_huawei_kirin980_KernelSU
           ref: master
-          submodules: 'true' # THIS FIXES THE GHOST FILE ERROR
+          submodules: 'true'
           fetch-depth: 100
 
       - name: Install Dependencies
@@ -23,11 +22,9 @@ jobs:
           sudo dpkg --add-architecture i386
           sudo apt-get update -y
           
-          # Our proven 22.04 dependency list
           sudo apt-get install -y binutils make python2 libssl-dev flex unzip ca-certificates xz-utils cpio device-tree-compiler git bc bison build-essential ccache curl g++-multilib gcc-multilib gnupg gperf lib32ncurses5-dev lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libxml2 libxml2-utils lzop rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3 python3-dev libc6:i386 libncurses5:i386 libstdc++6:i386 mkbootimg
           sudo ln -sf /usr/bin/python2.7 /usr/bin/python
           
-          # Maintain our DTC wrapper just in case Huawei's -Werror traps are still active
           sudo mv /usr/bin/dtc /usr/bin/dtc_real
           sudo bash -c 'cat > /usr/bin/dtc << "EOF"
           #!/bin/bash
@@ -77,7 +74,7 @@ jobs:
           make $KERNEL_CMDLINE -j$(nproc --all) HOSTCC="gcc -fcommon" KCFLAGS="-Wno-error -Wno-format -Wno-implicit-function-declaration"
 
       - name: Upload Kernel Image
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4 # <-- BUMPED TO v4
         with:
           name: Kirin980-SukiSU-Kernel
           path: out/arch/arm64/boot/Image.gz-dtb
