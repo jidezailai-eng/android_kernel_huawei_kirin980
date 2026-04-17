@@ -74,36 +74,39 @@ jobs:
           curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s main
           
           # Fix access_ok
-          sed -i 's/access_ok(/compat_access_ok(/g' drivers/kernelsu/kpm/kpm.c || true
-          sed -i '1i #define compat_access_ok(addr, size) access_ok(1, (addr), (size))' drivers/kernelsu/kpm/kpm.c || true
+          grep -rl 'access_ok(' KernelSU/ | xargs sed -i 's/access_ok(/compat_access_ok(/g' || true
+          sed -i '1i #define compat_access_ok(addr, size) access_ok(1, (addr), (size))' KernelSU/kernel/kpm/kpm.c || true
           
           # Remove incompatible struct member request
-          sed -i '/DEFINE_MEMBER(task_struct, security)/d' drivers/kernelsu/kpm/super_access.c || true
+          sed -i '/DEFINE_MEMBER(task_struct, security)/d' KernelSU/kernel/kpm/super_access.c || true
           
           # Use Python safely by writing it to a file first to avoid YAML parsing errors
           cat << 'EOF' > fix_loops.py
           import re
-          with open('drivers/kernelsu/kpm/super_access.c', 'r') as f:
-              content = f.read()
-          content = re.sub(r'for\s*\(\s*size_t\s+([a-zA-Z0-9_]+)\s*=\s*0\s*;', r'size_t \1; for (\1 = 0;', content)
-          with open('drivers/kernelsu/kpm/super_access.c', 'w') as f:
-              f.write(content)
+          import os
+          target = 'KernelSU/kernel/kpm/super_access.c'
+          if os.path.exists(target):
+              with open(target, 'r') as f:
+                  content = f.read()
+              content = re.sub(r'for\s*\(\s*size_t\s+([a-zA-Z0-9_]+)\s*=\s*0\s*;', r'size_t \1; for (\1 = 0;', content)
+              with open(target, 'w') as f:
+                  f.write(content)
           EOF
           python3 fix_loops.py
           
-          # Fix Linux 4.9 header incompatibilities (compiler_types.h -> compiler.h)
-          find drivers/kernelsu -type f -exec sed -i 's/linux\/compiler_types.h/linux\/compiler.h/g' {} +
+          # Bruteforce Linux 4.9 header incompatibilities (compiler_types.h -> compiler.h)
+          grep -rl 'compiler_types.h' KernelSU/ | xargs sed -i 's/compiler_types.h/compiler.h/g' || true
           
           # Inject syscall_fn_t header
           echo '#include <asm/ptrace.h>' > tmp_h.h
           echo 'typedef asmlinkage long (*syscall_fn_t)(const struct pt_regs *regs);' >> tmp_h.h
-          cat drivers/kernelsu/hook/syscall_hook.h >> tmp_h.h
-          mv tmp_h.h drivers/kernelsu/hook/syscall_hook.h
+          cat KernelSU/kernel/hook/syscall_hook.h >> tmp_h.h
+          mv tmp_h.h KernelSU/kernel/hook/syscall_hook.h
           
           # Remove unsupported features/flags
-          sed -i '/MODULE_IMPORT_NS/d' drivers/kernelsu/core/init.c || true
-          sed -i 's/-Wno-gcc-compat//g' drivers/kernelsu/Makefile || true
-          sed -i 's/-Wno-int-conversion//g' drivers/kernelsu/Makefile || true
+          grep -rl 'MODULE_IMPORT_NS' KernelSU/ | xargs sed -i '/MODULE_IMPORT_NS/d' || true
+          grep -rl -- '-Wno-gcc-compat' KernelSU/ | xargs sed -i 's/-Wno-gcc-compat//g' || true
+          grep -rl -- '-Wno-int-conversion' KernelSU/ | xargs sed -i 's/-Wno-int-conversion//g' || true
 
       - name: Configure and Build Kernel
         run: |
