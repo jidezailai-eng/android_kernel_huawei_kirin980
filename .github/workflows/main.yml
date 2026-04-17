@@ -62,6 +62,78 @@ jobs:
           mkdir -p kernel/cgroup_huawei
           echo "/* Dummy */" > kernel/cgroup_huawei/cgroup_pids.h
           
+          # Fix Linker Errors (Undefined References)
+          echo "int audio_dsm_report_num(void) { return 0; } int audio_dsm_report_info(void) { return 0; } int audio_dsm_register(void) { return 0; }" > drivers/devkit/audiokit/dsm_audio/dsm_audio.c
+          mkdir -p drivers/devkit/lcdkit/lcdkit3.0/kernel/hisi/include
+          echo -e "#ifndef __LCD_KIT_ADAPT_H__\n#define __LCD_KIT_ADAPT_H__\n#include <linux/types.h>\nstruct lcd_kit_dsi_panel_cmds;\nint lcd_kit_dsi_cmds_rx(void* hld, uint8_t* out, struct lcd_kit_dsi_panel_cmds* cmds);\n#endif" > drivers/devkit/lcdkit/lcdkit3.0/kernel/hisi/include/lcd_kit_adapt.h
+          
+          cp drivers/devkit/tpkit/3_0/*.h include/ || true
+          cp drivers/devkit/tpkit/3_0/*/*.h include/ || true
+          cp drivers/hisi/ddrc/*.h include/ || true
+          cp drivers/hisi/hi64xx_dsp/*.h include/ || true
+          cp drivers/huawei_platform/connectivity/bcm/wifi/include/*.h include/ || true
+          cp drivers/huawei_platform/connectivity/bcm/wifi/driver/bcmdhd/*.h include/ || true
+          cp drivers/huawei_platform/connectivity/bcm/wifi/driver/bcmdhd/include/*.h include/ || true
+          
+          touch include/hi64xx_algo_interface.h
+          echo "int hifi_misc_get_platform_type(void) { return 0; } int hifi_misc_probe(void) { return 0; } int hifi_misc_pcm_read(void) { return 0; } int hifi_misc_set_platform_type(void) { return 0; }" > drivers/hisi/hifi_dsp/hifi_lpp.c
+          
+          # NEW: Fix Linker errors for hifi_om.c and rdr_hisi_audio_soc.c
+          sed -i '1i #define try_copy_from_user copy_from_user\n#define try_copy_to_user copy_to_user' drivers/hisi/hifi_dsp/hifi_om.c || true
+          echo "int hifi_get_log_signal(void) { return 0; } void hifi_release_log_signal(void) {}" >> drivers/hisi/hifi_dsp/hifi_om.c || true
+          echo "int sochifi_watchdog_send_event(void) { return 0; }" >> drivers/hisi/mntn/blackbox/platform_hifi/rdr_hisi_audio_soc.c || true
+          
+          mkdir -p include/linux
+          echo "#include <asm/cacheflush.h>" > include/linux/set_memory.h
+
+      - name: Configure and Build Kernel
+        run: |
+          export PATH=$(pwd)/toolchain/bin/:$PATH
+          export HOSTCFLAGS="-fcommon -fPIC"
+          export HOSTLDFLAGS="-fcommon"
+          
+          mkdir -p out
+          make $KERNEL_CMDLINE Pangu_Kirin980_defconfig
+          
+          # APatch REQUIRES KALLSYMS to inject its code into the binary
+          echo "CONFIG_KALLSYMS=y" >> out/.config
+          echo "CONFIG_KALLSYMS_ALL=y" >> out/.config
+          
+          yes "" | make $KERNEL_CMDLINE oldconfig
+          make $KERNEL_CMDLINE -j$(nproc --all) HOSTCC="gcc -fcommon"
+
+      - name: Upload APatch-Ready Kernel Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kirin980-APatch-Kernel
+          path: out/arch/arm64/boot/Image.gz-dtb        run: git clone https://github.com/Coconutat/ToolChains.git --depth=1 -b linaro_gcc_4.9 toolchain
+
+      - name: Apply EMUI 9 Porting Guide Fixes (Security Bypass)
+        run: |
+          # Disable Huawei's aggressive root scanning and security modules
+          for conf in CONFIG_HISI_PMALLOC CONFIG_HIVIEW_SELINUX CONFIG_HISI_SELINUX_EBITMAP_RO CONFIG_HISI_SELINUX_PROT CONFIG_HISI_RO_LSM_HOOKS CONFIG_INTEGRITY CONFIG_INTEGRITY_AUDIT CONFIG_HUAWEI_CRYPTO_TEST_MDPP CONFIG_HUAWEI_SELINUX_DSM CONFIG_HUAWEI_HIDESYMS CONFIG_HW_SLUB_SANITIZE CONFIG_HUAWEI_PROC_CHECK_ROOT CONFIG_HW_ROOT_SCAN CONFIG_HUAWEI_EIMA CONFIG_HUAWEI_EIMA_ACCESS_CONTROL CONFIG_HW_DOUBLE_FREE_DYNAMIC_CHECK CONFIG_HKIP_ATKINFO CONFIG_HW_KERNEL_STP CONFIG_HISI_HHEE CONFIG_HISI_HHEE_TOKEN CONFIG_HISI_DIEID CONFIG_HISI_SUBPMU CONFIG_TEE_ANTIROOT_CLIENT CONFIG_HWAA CONFIG_DM_VERITY CONFIG_DM_VERITY_AVB; do
+              sed -i "s/${conf}=y/# ${conf} is not set/g" arch/arm64/configs/Pangu_Kirin980_defconfig || true
+          done
+          
+          # Enable SELinux Develop for Permissive mode support
+          sed -i 's/# CONFIG_SECURITY_SELINUX_DEVELOP is not set/CONFIG_SECURITY_SELINUX_DEVELOP=y/g' arch/arm64/configs/Pangu_Kirin980_defconfig || true
+          echo "CONFIG_SECURITY_SELINUX_DEVELOP=y" >> arch/arm64/configs/Pangu_Kirin980_defconfig
+
+      - name: Pre-Patch Huawei Source Code
+        run: |
+          # Fix inherent Huawei source code warnings that halt GCC 4.9
+          sed -i 's/-Werror-implicit-function-declaration//g' Makefile || true
+          sed -i 's/-Werror//g' Makefile || true
+          sed -i 's/YYLTYPE yylloc;/extern YYLTYPE yylloc;/g' scripts/dtc/dtc-lexer.lex.c_shipped || true
+          sed -i 's/\.warn = true/.warn = false/g' scripts/dtc/checks.c || true
+          sed -i 's/\.error = true/.error = false/g' scripts/dtc/checks.c || true
+          
+          echo "/* Dummy slowpath_count.h */" > include/slowpath_count.h
+          sed -i 's/<slowpath_count.h>/"slowpath_count.h"/g' mm/hisi/slowpath_count.c || true
+          sed -i 's/<.\/cgroup_huawei\/cgroup_pids.h>/"cgroup_huawei\/cgroup_pids.h"/g' kernel/fork.c || true
+          mkdir -p kernel/cgroup_huawei
+          echo "/* Dummy */" > kernel/cgroup_huawei/cgroup_pids.h
+          
           echo "int audio_dsm_report_num(void) { return 0; } int audio_dsm_report_info(void) { return 0; } int audio_dsm_register(void) { return 0; }" > drivers/devkit/audiokit/dsm_audio/dsm_audio.c
           mkdir -p drivers/devkit/lcdkit/lcdkit3.0/kernel/hisi/include
           echo -e "#ifndef __LCD_KIT_ADAPT_H__\n#define __LCD_KIT_ADAPT_H__\n#include <linux/types.h>\nstruct lcd_kit_dsi_panel_cmds;\nint lcd_kit_dsi_cmds_rx(void* hld, uint8_t* out, struct lcd_kit_dsi_panel_cmds* cmds);\n#endif" > drivers/devkit/lcdkit/lcdkit3.0/kernel/hisi/include/lcd_kit_adapt.h
