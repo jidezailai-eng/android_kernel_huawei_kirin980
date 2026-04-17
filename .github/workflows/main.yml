@@ -38,6 +38,10 @@ jobs:
 
       - name: Pre-Patch Huawei Source Code
         run: |
+          # Nuke all strict -Werror flags from the main Makefile safely
+          sed -i 's/-Werror-implicit-function-declaration//g' Makefile || true
+          sed -i 's/-Werror//g' Makefile || true
+          
           sed -i 's/YYLTYPE yylloc;/extern YYLTYPE yylloc;/g' scripts/dtc/dtc-lexer.lex.c_shipped || true
           sed -i 's/\.warn = true/.warn = false/g' scripts/dtc/checks.c || true
           sed -i 's/\.error = true/.error = false/g' scripts/dtc/checks.c || true
@@ -71,15 +75,17 @@ jobs:
         run: |
           curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s main
           
+          # We must target the PHYSICAL KernelSU folder, not the symlink!
+          
           # 1. SukiSU access_ok Macro Compatibility Fix
-          sed -i 's/access_ok(/compat_access_ok(/g' drivers/kernelsu/kpm/kpm.c || true
-          sed -i '1i #define compat_access_ok(addr, size) access_ok(1, (addr), (size))' drivers/kernelsu/kpm/kpm.c || true
+          sed -i 's/access_ok(/compat_access_ok(/g' KernelSU/kernel/kpm/kpm.c || true
+          sed -i '1i #define compat_access_ok(addr, size) access_ok(1, (addr), (size))' KernelSU/kernel/kpm/kpm.c || true
           
           # 2. Strike the incompatible KPM security offset request
-          sed -i '/DEFINE_MEMBER(task_struct, security)/d' drivers/kernelsu/kpm/super_access.c || true
+          sed -i '/DEFINE_MEMBER(task_struct, security)/d' KernelSU/kernel/kpm/super_access.c || true
           
           # 3. Apply modern C99 standard ONLY to the SukiSU folders
-          find drivers/kernelsu -name "Makefile" -exec sh -c 'echo "ccflags-y += -std=gnu99" >> "{}"' \;
+          find KernelSU/kernel -name "Makefile" -exec sh -c 'echo "ccflags-y += -std=gnu99 -Wno-error -Wno-implicit-function-declaration" >> "{}"' \;
 
       - name: Configure and Build Kernel
         run: |
@@ -97,10 +103,9 @@ jobs:
           echo "CONFIG_SUSFS=y" >> out/.config
           
           yes "" | make $KERNEL_CMDLINE oldconfig
-          sed -i 's/-Werror-implicit-function-declaration//g' Makefile || true
           
-          # The global C99 flag is actually gone from this line now!
-          make $KERNEL_CMDLINE -j$(nproc --all) HOSTCC="gcc -fcommon" KCFLAGS="-Wno-error -Wno-format -Wno-implicit-function-declaration"
+          # Notice how KCFLAGS is gone from the make command! No more overrides.
+          make $KERNEL_CMDLINE -j$(nproc --all) HOSTCC="gcc -fcommon"
 
       - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
