@@ -77,6 +77,9 @@ jobs:
           
           # 2. Strike the incompatible KPM security offset request
           sed -i '/DEFINE_MEMBER(task_struct, security)/d' drivers/kernelsu/kpm/super_access.c || true
+          
+          # 3. Apply modern C99 standard ONLY to the SukiSU folders (Creates the Time Bubble)
+          find drivers/kernelsu -name "Makefile" -exec sh -c 'echo "ccflags-y += -std=gnu99" >> "{}"' \;
 
       - name: Configure and Build Kernel
         run: |
@@ -96,8 +99,8 @@ jobs:
           yes "" | make $KERNEL_CMDLINE oldconfig
           sed -i 's/-Werror-implicit-function-declaration//g' Makefile || true
           
-          # ADDED -std=gnu99 TO FIX THE SukiSU FOR-LOOP CRASH
-          make $KERNEL_CMDLINE -j$(nproc --all) HOSTCC="gcc -fcommon" KCFLAGS="-Wno-error -Wno-format -Wno-implicit-function-declaration -std=gnu99"
+          # We removed the global -std=gnu99 from KCFLAGS so Huawei's code builds normally again
+          make $KERNEL_CMDLINE -j$(nproc --all) HOSTCC="gcc -fcommon" KCFLAGS="-Wno-error -Wno-format -Wno-implicit-function-declaration"
 
       - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
