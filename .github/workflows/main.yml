@@ -1,40 +1,26 @@
-name: Build Kirin 980 Kernel (The Ultimate Hybrid)
-
-on:
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: ubuntu-22.04
-    env:
-      KERNEL_CMDLINE: "ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- O=out"
-    steps:
-      - name: Checkout Source
-        uses: actions/checkout@v4
-        with:
-          repository: maimaiguanfan/android_kernel_huawei_kirin980 
-          ref: master
-
-      - name: Install Dependencies
+- name: Inject and Patch SukiSU-Ultra
         run: |
-          sudo dpkg --add-architecture i386
-          sudo apt-get update -y
-          sudo apt-get install -y binutils make python2 libssl-dev flex unzip ca-certificates xz-utils cpio device-tree-compiler git bc bison build-essential ccache curl g++-multilib gcc-multilib gnupg gperf lib32ncurses5-dev lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libxml2 libxml2-utils lzop rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3 python3-dev libc6:i386 libncurses5:i386 libstdc++6:i386
-          sudo ln -sf /usr/bin/python2.7 /usr/bin/python
+          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s main
           
-          # Our custom DTC wrapper
-          sudo mv /usr/bin/dtc /usr/bin/dtc_real
-          sudo bash -c 'cat > /usr/bin/dtc << "EOF"
-          #!/bin/bash
-          ARGS=$(echo "$@" | sed "s/-Werror//g" | sed "s/-W error//g")
-          /usr/bin/dtc_real -Wno-unit_address_vs_reg -Wno-simple_bus_reg -Wno-alias_paths -Wno-avoid_default_addr_size -Wno-gpios_property -Wno-interrupts_property -Wno-interrupt_provider -Wno-unique_unit_address -Wno-avoid_unnecessary_addr_size $ARGS || true
-          EOF'
-          sudo chmod +x /usr/bin/dtc
-          sudo mkdir -p /tools
-          sudo ln -s /usr/bin/dtc /tools/dtc
-
-      - name: Download Linaro Toolchain
-        run: git clone https://github.com/Coconutat/ToolChains.git --depth=1 -b linaro_gcc_4.9 toolchain
+          # We must target the PHYSICAL KernelSU folder, not the symlink!
+          
+          # 1. SukiSU access_ok Macro Compatibility Fix
+          sed -i 's/access_ok(/compat_access_ok(/g' KernelSU/kernel/kpm/kpm.c || true
+          sed -i '1i #define compat_access_ok(addr, size) access_ok(1, (addr), (size))' KernelSU/kernel/kpm/kpm.c || true
+          
+          # 2. Strike the incompatible KPM security offset request
+          sed -i '/DEFINE_MEMBER(task_struct, security)/d' KernelSU/kernel/kpm/super_access.c || true
+          
+          # 3. Brute-force fix the C99 'for' loops in super_access.c (C89 compliance)
+          sed -i 's/for (size_t i = 0;/size_t i;\n\tfor (i = 0;/g' KernelSU/kernel/kpm/super_access.c || true
+          sed -i 's/for (size_t i1 = 0;/size_t i1;\n\t\t\tfor (i1 = 0;/g' KernelSU/kernel/kpm/super_access.c || true
+          
+          # 4. Silence warnings for unsupported compiler flags in the older Linaro GCC
+          sed -i 's/-Wno-gcc-compat//g' KernelSU/kernel/Makefile || true
+          sed -i 's/-Wno-int-conversion//g' KernelSU/kernel/Makefile || true
+          
+          # 5. Fix missing syscall_fn_t in older kernels
+          sed -i '1i typedef asmlinkage long (*syscall_fn_t)(const struct pt_regs *regs);' KernelSU/kernel/hook/syscall_hook.h || true        run: git clone https://github.com/Coconutat/ToolChains.git --depth=1 -b linaro_gcc_4.9 toolchain
 
       - name: Apply EMUI 9 Porting Guide Fixes (Security Bypass)
         run: |
