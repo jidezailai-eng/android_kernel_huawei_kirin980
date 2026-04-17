@@ -22,6 +22,7 @@ jobs:
           sudo apt-get install -y binutils make python2 libssl-dev flex unzip ca-certificates xz-utils cpio device-tree-compiler git bc bison build-essential ccache curl g++-multilib gcc-multilib gnupg gperf lib32ncurses5-dev lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libxml2 libxml2-utils lzop rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3 python3-dev libc6:i386 libncurses5:i386 libstdc++6:i386
           sudo ln -sf /usr/bin/python2.7 /usr/bin/python
           
+          # Our custom DTC wrapper
           sudo mv /usr/bin/dtc /usr/bin/dtc_real
           sudo bash -c 'cat > /usr/bin/dtc << "EOF"
           #!/bin/bash
@@ -70,9 +71,12 @@ jobs:
         run: |
           curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s main
           
-          # SukiSU access_ok Macro Compatibility Fix
+          # 1. SukiSU access_ok Macro Compatibility Fix
           sed -i 's/access_ok(/compat_access_ok(/g' drivers/kernelsu/kpm/kpm.c || true
           sed -i '1i #define compat_access_ok(addr, size) access_ok(1, (addr), (size))' drivers/kernelsu/kpm/kpm.c || true
+          
+          # 2. Strike the incompatible KPM security offset request
+          sed -i '/DEFINE_MEMBER(task_struct, security)/d' drivers/kernelsu/kpm/super_access.c || true
 
       - name: Configure and Build Kernel
         run: |
@@ -92,8 +96,8 @@ jobs:
           yes "" | make $KERNEL_CMDLINE oldconfig
           sed -i 's/-Werror-implicit-function-declaration//g' Makefile || true
           
-          # FULL SPEED AHEAD!
-          make $KERNEL_CMDLINE -j$(nproc --all) HOSTCC="gcc -fcommon" KCFLAGS="-Wno-error -Wno-format -Wno-implicit-function-declaration"
+          # ADDED -std=gnu99 TO FIX THE SukiSU FOR-LOOP CRASH
+          make $KERNEL_CMDLINE -j$(nproc --all) HOSTCC="gcc -fcommon" KCFLAGS="-Wno-error -Wno-format -Wno-implicit-function-declaration -std=gnu99"
 
       - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
